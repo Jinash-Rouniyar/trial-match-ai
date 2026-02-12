@@ -7,7 +7,12 @@ const PatientDetailPage: React.FC = () => {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [profile, setProfile] = useState<any | null>(null);
+  const [profile, setProfile] = useState<{
+    conditions?: string[];
+    medications?: string[];
+    text_summary?: string;
+    ner_entities?: string[];
+  } | null>(null);
   const [latestMatches, setLatestMatches] = useState<MatchDocument | null>(null);
   const [runningMatch, setRunningMatch] = useState(false);
 
@@ -20,7 +25,7 @@ const PatientDetailPage: React.FC = () => {
         const data = await fetchPatientDetail(patientId);
         setProfile(data.profile);
         setLatestMatches((data.latest_matches as MatchDocument | null) ?? null);
-      } catch (e) {
+      } catch {
         setError("Failed to load patient details");
       } finally {
         setLoading(false);
@@ -36,7 +41,7 @@ const PatientDetailPage: React.FC = () => {
       const doc = await runMatching(patientId, mode);
       setLatestMatches(doc);
       navigate(`/patients/${encodeURIComponent(patientId)}/report`);
-    } catch (e) {
+    } catch {
       setError("Failed to run matching");
     } finally {
       setRunningMatch(false);
