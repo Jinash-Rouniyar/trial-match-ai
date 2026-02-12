@@ -27,7 +27,7 @@ const UploadPanel: React.FC<Props> = ({ onUploaded }) => {
       const json = JSON.parse(text);
       await uploadPatient(json);
       if (onUploaded) onUploaded();
-    } catch (e) {
+    } catch {
       setError("Failed to upload or parse JSON file.");
     } finally {
       setLoading(false);

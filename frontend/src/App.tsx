@@ -12,7 +12,10 @@ const App: React.FC = () => {
     <div className="min-h-screen flex flex-col bg-[#FDFCFC] text-slate-900">
       <header className="border-b border-slate-200 bg-white">
         <div className="max-w-5xl mx-auto flex items-center justify-between px-6 h-16">
-          <Link to="/" className="text-sm font-semibold tracking-tight text-slate-900">
+          <Link
+            to="/"
+            className="text-base font-semibold tracking-tight text-slate-900 md:text-lg"
+          >
             TrialMatch AI
           </Link>
           <nav className="flex items-center gap-3 text-xs">

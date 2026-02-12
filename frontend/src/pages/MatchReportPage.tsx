@@ -19,7 +19,7 @@ const MatchReportPage: React.FC = () => {
         const data = await fetchPatientDetail(patientId);
         const latest = (data.latest_matches as MatchDocument | null) ?? null;
         setMatchDoc(latest);
-      } catch (e) {
+      } catch {
         setError("Failed to load latest match results");
       } finally {
         setLoading(false);

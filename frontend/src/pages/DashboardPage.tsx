@@ -15,7 +15,7 @@ const DashboardPage: React.FC = () => {
       setError(null);
       const data = await listPatients();
       setPatients(data.patients);
-    } catch (e) {
+    } catch {
       setError("Failed to load patients");
     } finally {
       setLoading(false);
