@@ -13,7 +13,7 @@ const LandingPage: React.FC = () => {
             CLINICAL TRIAL MATCHING
           </p>
           <h1 className="text-5xl font-semibold tracking-tight text-slate-900">
-            TrialMatch AI for synthetic cohorts
+            TrialMatch AI for clinical screening
           </h1>
           <p className="text-base text-slate-600 max-w-xl">
             Upload synthetic EHRs, parse eligibility criteria with LLMs, and review ranked trial
