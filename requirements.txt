@@ -1,0 +1,10 @@
+flask==3.0.3
+flask-cors==4.0.1
+pandas==2.2.3
+huggingface_hub==0.26.0
+numpy==1.26.4
+pymongo==4.10.1
+tqdm==4.66.5
+python-dotenv==1.0.1
+reportlab==4.2.5
+pytest==8.3.3
