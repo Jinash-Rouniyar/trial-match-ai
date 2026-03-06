@@ -2,6 +2,7 @@ import React, { useEffect, useState } from "react";
 import { useNavigate, useParams } from "react-router-dom";
 import { fetchPatientDetail, getPatientReportPdfUrl, MatchDocument } from "../api/client";
 import MatchResultTable from "../components/MatchResultTable";
+import { useAuth } from "../hooks/useAuth";
 
 const MatchReportPage: React.FC = () => {
   const { patientId } = useParams<{ patientId: string }>();
@@ -9,6 +10,7 @@ const MatchReportPage: React.FC = () => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [matchDoc, setMatchDoc] = useState<MatchDocument | null>(null);
+  const { session } = useAuth();
 
   useEffect(() => {
     const load = async () => {
@@ -49,7 +51,7 @@ const MatchReportPage: React.FC = () => {
         </div>
         <div className="mt-3 flex items-center gap-2 md:mt-0">
           <a
-            href={getPatientReportPdfUrl(patientId)}
+            href={getPatientReportPdfUrl(patientId, session?.access_token)}
             target="_blank"
             rel="noopener noreferrer"
             className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.7rem] font-medium text-slate-900 hover:bg-slate-50"

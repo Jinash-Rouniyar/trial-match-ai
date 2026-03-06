@@ -5,6 +5,7 @@ huggingface_hub==0.26.0
 numpy==1.26.4
 pymongo==4.10.1
 tqdm==4.66.5
-python-dotenv==1.0.1
+python-dotenv>=1.1.0
 reportlab==4.2.5
 pytest==8.3.3
+PyJWT>=2.10.1

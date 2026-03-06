@@ -26,6 +26,10 @@ class Settings:
 
     # Simple admin auth for project-level routes
     app_admin_secret: str = os.getenv("APP_ADMIN_SECRET", "")
+    
+    # Supabase Auth
+    supabase_url: str = os.getenv("NEXT_PUBLIC_SUPABASE_URL", "")
+    supabase_jwt_secret: str = os.getenv("SUPABASE_JWT_SECRET", "")
 
 
 settings = Settings()
