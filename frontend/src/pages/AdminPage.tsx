@@ -63,9 +63,7 @@ const AdminPage: React.FC = () => {
       if (!Array.isArray(trials)) {
         throw new Error("Invalid trials JSON structure.");
       }
-      const adminToken =
-        window.prompt("Enter admin token (APP_ADMIN_SECRET) for trials upload") || undefined;
-      const res = await uploadTrials(trials, adminToken);
+      const res = await uploadTrials(trials);
       setTrialsMessage(`Uploaded/updated ${res.upserted} trials.`);
     } catch {
       setTrialsMessage("Failed to upload trials JSON. Ensure it is valid.");
@@ -121,6 +119,9 @@ const AdminPage: React.FC = () => {
             No patients yet. Once users upload patients, they’ll appear here.
           </p>
         )}
+        {error && (
+          <p className="mt-2 text-[0.7rem] text-rose-500">{error}</p>
+        )}
       </section>
 
       <section className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
@@ -128,25 +129,23 @@ const AdminPage: React.FC = () => {
           <div>
             <p className="text-[0.7rem] uppercase tracking-[0.12em] text-slate-400">Trials</p>
             <h2 className="mt-1 text-sm font-medium text-slate-900">Upload trials dataset</h2>
-            <p className="mt-1 text-xs text-slate-600">
-              JSON array of trials with fields: <code>nct_id</code>, <code>brief_title</code>,{" "}
-              <code>criteria</code>, and optional <code>overall_status</code>. Protected by a simple
-              admin token.
+            <p className="mt-1 text-xs text-slate-500">
+              Upload a JSON file containing clinical trials to populate the matching database.
             </p>
           </div>
         </div>
-        <div className="mt-3 flex flex-col gap-3 sm:flex-row sm:items-center">
+        <div className="mt-3 flex items-center gap-3">
           <input
             type="file"
             accept="application/json"
             onChange={handleTrialsFileChange}
-            className="block w-full text-xs text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:bg-black"
+            className="block min-w-0 flex-1 text-xs text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:bg-black"
           />
           <button
             type="button"
             onClick={handleTrialsUpload}
             disabled={trialsUploading}
-            className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.7rem] font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
+            className="shrink-0 inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.7rem] font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
           >
             {trialsUploading ? "Uploading…" : "Upload trials"}
           </button>

@@ -1,4 +1,5 @@
 import axios from "axios";
+import { supabase } from "./supabaseClient";
 
 export const baseURL = import.meta.env.VITE_API_BASE_URL || "";
 
@@ -7,6 +8,14 @@ export const api = axios.create({
   headers: {
     "Content-Type": "application/json",
   }
+});
+
+api.interceptors.request.use(async (config) => {
+  const { data: { session } } = await supabase.auth.getSession();
+  if (session?.access_token) {
+    config.headers.Authorization = `Bearer ${session.access_token}`;
+  }
+  return config;
 });
 
 export interface PatientSummary {
@@ -81,25 +90,17 @@ export async function runBatchMatching(
 }
 
 export async function uploadTrials(
-  trials: Array<{ nct_id: string; brief_title: string; criteria: string; overall_status?: string }>,
-  adminToken?: string
+  trials: Array<{ nct_id: string; brief_title: string; criteria: string; overall_status?: string }>
 ) {
   const res = await api.post(
     "/api/trials_upload",
-    { trials },
-    {
-      headers: adminToken
-        ? {
-            "X-Admin-Token": adminToken
-          }
-        : {}
-    }
+    { trials }
   );
   return res.data as { upserted: number };
 }
 
-export function getPatientReportPdfUrl(patientId: string): string {
+export function getPatientReportPdfUrl(patientId: string, token?: string): string {
   const encoded = encodeURIComponent(patientId);
-  return `${baseURL}/api/patient_report_pdf?patient_id=${encoded}`;
+  return `${baseURL}/api/patient_report_pdf?patient_id=${encoded}&token=${token || ""}`;
 }
 

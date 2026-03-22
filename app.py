@@ -13,6 +13,7 @@ from trialmatch.services.matching_orchestrator import (
     run_matching_for_patient,
     latest_matches_for_patient,
 )
+from trialmatch.services.auth import require_auth
 from trialmatch.config import settings
 from reportlab.lib.pagesizes import letter
 from reportlab.pdfgen import canvas
@@ -26,27 +27,8 @@ def _error_response(message: str, status: int):
     return jsonify({"error": {"message": message, "status": status}}), status
 
 
-def require_admin(view_func: Callable[..., Any]):
-    """
-    Very simple admin guard based on a static token header.
-    Suitable for project-level protection of admin-style routes.
-    """
-
-    @wraps(view_func)
-    def wrapper(*args, **kwargs):
-        secret = settings.app_admin_secret
-        if not secret:
-            # If not configured, allow everything (for easier local grading)
-            return view_func(*args, **kwargs)
-        header_token = request.headers.get("X-Admin-Token")
-        if not header_token or header_token != secret:
-            return _error_response("Unauthorized (invalid admin token).", 401)
-        return view_func(*args, **kwargs)
-
-    return wrapper
-
-
 @app.post("/api/patients_upload")
+@require_auth(require_admin=False)
 def upload_patient():
     data = request.get_json(force=True, silent=True) or {}
     patient_json = data.get("patient")
@@ -77,6 +59,7 @@ def upload_patient():
 
 
 @app.get("/api/patients_index")
+@require_auth(require_admin=False)
 def list_patients():
     cursor = patients_collection().find().sort("created_at", -1).limit(100)
     patients = []
@@ -93,6 +76,7 @@ def list_patients():
 
 
 @app.get("/api/patient_detail")
+@require_auth(require_admin=False)
 def patient_detail():
     patient_id = request.args.get("patient_id")
     if not patient_id:
@@ -116,6 +100,7 @@ def patient_detail():
 
 
 @app.post("/api/trials_match")
+@require_auth(require_admin=False)
 def trials_match():
     data = request.get_json(force=True, silent=True) or {}
     patient_id = data.get("patient_id")
@@ -149,6 +134,7 @@ def trials_match():
 
 
 @app.post("/api/trials_match_batch")
+@require_auth(require_admin=False)
 def trials_match_batch():
     """
     Run matching for multiple patients in one request.
@@ -192,7 +178,7 @@ def trials_match_batch():
 
 
 @app.post("/api/trials_upload")
-@require_admin
+@require_auth(require_admin=True)
 def trials_upload():
     """
     Admin-style endpoint to upload a set of clinical trials into MongoDB.
@@ -239,6 +225,7 @@ def trials_upload():
 
 
 @app.get("/api/patient_report_pdf")
+@require_auth(require_admin=False)
 def patient_report_pdf():
     """
     Generate a simple PDF report for the latest match of a given patient.
