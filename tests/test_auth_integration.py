@@ -1,6 +1,8 @@
 import pytest
 import jwt
 from datetime import datetime, timezone, timedelta
+from unittest.mock import MagicMock, patch
+
 from app import app
 from trialmatch.config import settings
 
@@ -70,10 +72,14 @@ def test_valid_admin_token_admin_route(client):
     assert response.status_code == 400
     assert "must be a non-empty list" in response.get_json()["error"]["message"]
 
-def test_token_in_query_params(client):
+@patch("app.patients_collection")
+def test_token_in_query_params(mock_patients_collection, client):
+    """Avoid real Mongo: PDF route calls find_one; CI / local may have no server."""
+    mock_coll = MagicMock()
+    mock_coll.find_one.return_value = None
+    mock_patients_collection.return_value = mock_coll
+
     token = generate_token(role="user")
-    # patient_report_pdf can take token in URL
     response = client.get(f"/api/patient_report_pdf?patient_id=test&token={token}")
-    # 404 because patient 'test' not found
     assert response.status_code == 404
     assert "Patient 'test' not found" in response.get_json()["error"]["message"]
