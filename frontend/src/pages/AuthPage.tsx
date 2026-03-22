@@ -63,8 +63,10 @@ const AuthPage: React.FC = () => {
       } else {
         navigate("/app");
       }
-    } catch (err: any) {
-      setErrorMsg(err.message || "An error occurred");
+    } catch (err: unknown) {
+      const message =
+        err instanceof Error ? err.message : "An error occurred";
+      setErrorMsg(message);
     } finally {
       setLoading(false);
     }

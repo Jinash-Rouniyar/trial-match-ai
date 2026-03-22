@@ -119,6 +119,9 @@ const AdminPage: React.FC = () => {
             No patients yet. Once users upload patients, they’ll appear here.
           </p>
         )}
+        {error && (
+          <p className="mt-2 text-[0.7rem] text-rose-500">{error}</p>
+        )}
       </section>
 
       <section className="rounded-2xl border border-dashed border-slate-200 bg-white/60 p-5 shadow-[0_1px_3px_rgba(15,23,42,0.04)]">
