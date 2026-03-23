@@ -45,10 +45,28 @@ const AuthPage: React.FC = () => {
         });
         if (error) throw error;
 
-        // If session is null after signup, email confirmation is required
+        // No user row: Supabase may refuse without exposing whether email exists
+        if (!data.user) {
+          setErrorMsg(
+            "Could not register this email. If you already have an account, use Log in instead."
+          );
+          return;
+        }
+
+        // Duplicate signup: Supabase often returns 200 with no session and empty identities
+        // (anti–email-enumeration). Do not show “check your email” in that case.
+        const identities = data.user.identities ?? [];
+        if (!data.session && identities.length === 0) {
+          setErrorMsg(
+            "This email is likely already registered. Use Log in with your existing password, or reset it from the Supabase dashboard (Authentication → Users → Send password recovery)."
+          );
+          return;
+        }
+
+        // New user, email confirmation required before session exists
         if (!data.session) {
           setSignupSuccess(true);
-          return; // Stop navigation
+          return;
         }
       } else {
         const { error } = await supabase.auth.signInWithPassword({
