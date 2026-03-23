@@ -15,6 +15,23 @@ const PatientDetailPage: React.FC = () => {
   } | null>(null);
   const [latestMatches, setLatestMatches] = useState<MatchDocument | null>(null);
   const [runningMatch, setRunningMatch] = useState(false);
+  const [showAllConditions, setShowAllConditions] = useState(false);
+  const [showAllMedications, setShowAllMedications] = useState(false);
+  const [showFullNarrative, setShowFullNarrative] = useState(false);
+
+  const toUniqueList = (items?: string[]) => {
+    const out: string[] = [];
+    const seen = new Set<string>();
+    for (const raw of items || []) {
+      const v = (raw || "").trim();
+      if (!v) continue;
+      const key = v.toLowerCase();
+      if (seen.has(key)) continue;
+      seen.add(key);
+      out.push(v);
+    }
+    return out;
+  };
 
   useEffect(() => {
     const load = async () => {
@@ -52,6 +69,24 @@ const PatientDetailPage: React.FC = () => {
     return <p>Missing patient id.</p>;
   }
 
+  const conditions = toUniqueList(profile?.conditions);
+  const medications = toUniqueList(profile?.medications);
+  const narrative = (profile?.text_summary || "").trim();
+
+  const conditionsPreview = showAllConditions ? conditions : conditions.slice(0, 12);
+  const medicationsPreview = showAllMedications ? medications : medications.slice(0, 10);
+  const narrativeSentences = narrative
+    ? narrative
+        .split(". ")
+        .map((s) => s.trim())
+        .filter(Boolean)
+    : [];
+  const narrativePreview = showFullNarrative
+    ? narrative
+    : `${narrativeSentences.slice(0, 5).join(". ")}${
+        narrativeSentences.length > 5 ? "." : ""
+      }`;
+
   return (
     <div className="space-y-6">
       <button
@@ -81,35 +116,85 @@ const PatientDetailPage: React.FC = () => {
           </section>
           <section>
             <h3 className="text-xs font-medium text-slate-900">Conditions</h3>
-            <p className="mt-1 text-xs text-slate-600">
-              {profile.conditions && profile.conditions.length
-                ? profile.conditions.join(", ")
-                : "None parsed"}
-            </p>
+            {!conditions.length ? (
+              <p className="mt-1 text-xs text-slate-400">None parsed</p>
+            ) : (
+              <>
+                <p className="mt-1 text-[0.7rem] text-slate-500">
+                  {conditions.length} unique conditions
+                </p>
+                <div className="mt-2 flex flex-wrap gap-1.5">
+                  {conditionsPreview.map((item) => (
+                    <span
+                      key={item}
+                      className="inline-flex rounded-full bg-slate-100 px-2.5 py-1 text-[0.68rem] text-slate-700"
+                    >
+                      {item}
+                    </span>
+                  ))}
+                </div>
+                {conditions.length > 12 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllConditions((v) => !v)}
+                    className="mt-2 text-[0.7rem] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                  >
+                    {showAllConditions
+                      ? "Show fewer conditions"
+                      : `Show all conditions (+${conditions.length - 12})`}
+                  </button>
+                )}
+              </>
+            )}
           </section>
           <section>
             <h3 className="text-xs font-medium text-slate-900">Medications</h3>
-            <p className="mt-1 text-xs text-slate-600">
-              {profile.medications && profile.medications.length
-                ? profile.medications.join(", ")
-                : "None parsed"}
-            </p>
+            {!medications.length ? (
+              <p className="mt-1 text-xs text-slate-400">None parsed</p>
+            ) : (
+              <>
+                <p className="mt-1 text-[0.7rem] text-slate-500">
+                  {medications.length} unique medications
+                </p>
+                <ul className="mt-2 space-y-1">
+                  {medicationsPreview.map((item) => (
+                    <li key={item} className="text-xs text-slate-600">
+                      • {item}
+                    </li>
+                  ))}
+                </ul>
+                {medications.length > 10 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAllMedications((v) => !v)}
+                    className="mt-2 text-[0.7rem] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                  >
+                    {showAllMedications
+                      ? "Show fewer medications"
+                      : `Show all medications (+${medications.length - 10})`}
+                  </button>
+                )}
+              </>
+            )}
           </section>
           <section>
             <h3 className="text-xs font-medium text-slate-900">Summary narrative</h3>
-            <p className="mt-1 text-xs text-slate-700">
-              {profile.text_summary || (
-                <span className="text-slate-400">No summary available.</span>
-              )}
-            </p>
-          </section>
-          <section>
-            <h3 className="text-xs font-medium text-slate-900">Extracted clinical entities</h3>
-            <p className="mt-1 text-xs text-slate-600">
-              {profile.ner_entities && profile.ner_entities.length
-                ? profile.ner_entities.join(", ")
-                : "None detected"}
-            </p>
+            {!narrative ? (
+              <p className="mt-1 text-xs text-slate-400">No summary available.</p>
+            ) : (
+              <>
+                <p className="mt-1 text-xs leading-5 text-slate-700">{narrativePreview}</p>
+                {narrativeSentences.length > 5 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowFullNarrative((v) => !v)}
+                    className="mt-2 text-[0.7rem] font-medium text-slate-600 underline underline-offset-2 hover:text-slate-900"
+                  >
+                    {showFullNarrative ? "Show shorter summary" : "Show full summary"}
+                  </button>
+                )}
+              </>
+            )}
           </section>
         </div>
       )}
@@ -120,8 +205,8 @@ const PatientDetailPage: React.FC = () => {
         </p>
         <h2 className="text-sm font-medium text-slate-900">Run trial matching</h2>
         <p className="text-xs text-slate-600">
-          Screen this patient against demo or randomly sampled recruiting trials. The first run may
-          take a bit longer while models warm up.
+          Screen this patient against all uploaded trials, or a small random subset for a
+          faster response.
         </p>
         <div className="flex flex-wrap gap-2">
           <button
@@ -129,7 +214,7 @@ const PatientDetailPage: React.FC = () => {
             onClick={() => handleRunMatching("demo")}
             className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-[0.7rem] font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60"
           >
-            {runningMatch ? "Running…" : "Match to demo trials"}
+            {runningMatch ? "Running…" : "Match to all trials"}
           </button>
           <button
             disabled={runningMatch}

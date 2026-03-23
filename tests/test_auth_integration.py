@@ -65,12 +65,24 @@ def test_valid_user_token_admin_route_forbidden(client):
 def test_valid_admin_token_admin_route(client):
     token = generate_token(role="admin")
     response = client.post(
-        "/api/trials_upload", 
-        json={"trials": []}, # Empty list returns 400 from route, but PASSes auth
-        headers={"Authorization": f"Bearer {token}"}
+        "/api/trials_upload",
+        json={"trials": []},
+        headers={"Authorization": f"Bearer {token}"},
     )
     assert response.status_code == 400
-    assert "must be a non-empty list" in response.get_json()["error"]["message"]
+    msg = response.get_json()["error"]["message"]
+    assert "non-empty" in msg or "studies" in msg
+
+
+def test_batch_match_requires_admin(client):
+    token = generate_token(role="user")
+    response = client.post(
+        "/api/trials_match_batch",
+        json={"patient_ids": ["p1"]},
+        headers={"Authorization": f"Bearer {token}"},
+    )
+    assert response.status_code == 403
+    assert "Admin privileges required" in response.get_json()["error"]["message"]
 
 @patch("app.patients_collection")
 def test_token_in_query_params(mock_patients_collection, client):
@@ -83,3 +95,40 @@ def test_token_in_query_params(mock_patients_collection, client):
     response = client.get(f"/api/patient_report_pdf?patient_id=test&token={token}")
     assert response.status_code == 404
     assert "Patient 'test' not found" in response.get_json()["error"]["message"]
+
+
+@patch("app.run_matching_for_patient")
+def test_trials_match_response_shape_demo_and_random(mock_run_matching, client):
+    token = generate_token(role="user")
+
+    def make_doc(pid: str, mode: str):
+        return {
+            "patient_id": pid,
+            "mode": mode,
+            "created_at": "2026-03-23T00:00:00+00:00",
+            "trials": [
+                {"nct_id": "NCT0001", "title": "Trial A", "score": 88.5},
+                {"nct_id": "NCT0002", "title": "Trial B", "score": 73.0},
+            ],
+        }
+
+    mock_run_matching.side_effect = lambda patient_id, mode, num_trials=None: make_doc(
+        patient_id, mode
+    )
+
+    for mode in ("demo", "random"):
+        response = client.post(
+            "/api/trials_match",
+            json={"patient_id": "p123", "mode": mode},
+            headers={"Authorization": f"Bearer {token}"},
+        )
+        assert response.status_code == 200
+        body = response.get_json()
+        assert body["patient_id"] == "p123"
+        assert body["mode"] == mode
+        assert isinstance(body["created_at"], str)
+        assert isinstance(body["trials"], list)
+        assert body["trials"][0]["nct_id"] == "NCT0001"
+        assert isinstance(body["trials"][0]["score"], (int, float))
+
+    assert mock_run_matching.call_count == 2

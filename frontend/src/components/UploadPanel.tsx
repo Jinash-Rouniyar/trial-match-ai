@@ -47,14 +47,15 @@ const UploadPanel: React.FC<Props> = ({ onUploaded }) => {
       <div className="flex flex-col sm:flex-row sm:items-center gap-3">
         <input
           type="file"
-          accept="application/json"
+          accept="application/json,.json"
           onChange={handleFileChange}
-          className="block w-full text-xs text-slate-700 file:mr-3 file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:bg-black"
+          className="block w-full cursor-pointer text-xs text-slate-700 file:mr-3 file:cursor-pointer file:rounded-md file:border-0 file:bg-slate-900 file:px-3 file:py-1.5 file:text-xs file:font-medium file:text-white hover:file:bg-black"
         />
         <button
+          type="button"
           onClick={handleUpload}
           disabled={loading}
-          className="inline-flex items-center rounded-full border border-slate-200 bg-white px-3 py-1.5 text-xs font-medium text-slate-900 hover:bg-slate-50 disabled:opacity-60 disabled:hover:bg-white"
+          className="inline-flex w-auto self-start cursor-pointer items-center rounded-full border border-slate-200 bg-white px-4 py-1.5 text-xs font-medium text-slate-900 hover:bg-slate-50 disabled:cursor-not-allowed disabled:opacity-60 disabled:hover:bg-white"
         >
           {loading ? "Uploading…" : "Upload"}
         </button>

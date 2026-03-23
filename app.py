@@ -1,13 +1,22 @@
 from datetime import datetime, timezone
 import io
 import time
-from functools import wraps
-from typing import Callable, Any, Dict, List
+from typing import Any, Dict, List
+
+from dotenv import load_dotenv
+
+load_dotenv()
 
 from flask import Flask, jsonify, request, send_file
 from flask_cors import CORS
+from pymongo.errors import PyMongoError
+from reportlab.pdfbase.pdfmetrics import stringWidth
 
 from trialmatch.services.db import patients_collection, trials_collection
+from trialmatch.services.clinicaltrials_gov_import import (
+    extract_trial_input_list,
+    normalize_trial_record,
+)
 from trialmatch.services.patient_processor import build_patient_profile_from_json
 from trialmatch.services.matching_orchestrator import (
     run_matching_for_patient,
@@ -25,6 +34,12 @@ CORS(app)
 
 def _error_response(message: str, status: int):
     return jsonify({"error": {"message": message, "status": status}}), status
+
+
+@app.errorhandler(PyMongoError)
+def handle_mongo_error(exc: PyMongoError):
+    """Return a clean JSON 500 instead of a raw Python traceback for DB errors."""
+    return _error_response(f"Database error: {exc}", 500)
 
 
 @app.post("/api/patients_upload")
@@ -134,7 +149,7 @@ def trials_match():
 
 
 @app.post("/api/trials_match_batch")
-@require_auth(require_admin=False)
+@require_auth(require_admin=True)
 def trials_match_batch():
     """
     Run matching for multiple patients in one request.
@@ -181,47 +196,42 @@ def trials_match_batch():
 @require_auth(require_admin=True)
 def trials_upload():
     """
-    Admin-style endpoint to upload a set of clinical trials into MongoDB.
+    Upload clinical trials into MongoDB.
 
-    Body shape:
-    {
-        "trials": [
-            {
-                "nct_id": "...",
-                "brief_title": "...",
-                "criteria": "...",
-                "overall_status": "RECRUITING"  # optional
-            },
-            ...
-        ]
-    }
+    Accepts a JSON array of studies, or ``{ "trials": [...] }`` / ``{ "studies": [...] }``.
+
+    Each item may be ClinicalTrials.gov v2 (``protocolSection``) or a legacy flat row
+    (``nct_id``, ``brief_title``, ``criteria``, optional ``overall_status``).
     """
-    data = request.get_json(force=True, silent=True) or {}
-    trials = data.get("trials")
-    if not isinstance(trials, list) or not trials:
-        return _error_response("`trials` must be a non-empty list.", 400)
+    payload = request.get_json(force=True, silent=True)
+    trial_items = extract_trial_input_list(payload)
+    if not trial_items:
+        return _error_response(
+            "Expected a non-empty JSON array of studies, or an object with a non-empty "
+            "`trials` or `studies` list.",
+            400,
+        )
 
     coll = trials_collection()
     upserted = 0
-    for item in trials:
-        if not isinstance(item, dict):
+    skipped = 0
+    for item in trial_items:
+        doc = normalize_trial_record(item)
+        if not doc:
+            skipped += 1
             continue
-        nct_id = item.get("nct_id")
-        brief_title = item.get("brief_title")
-        criteria = item.get("criteria")
-        if not (nct_id and brief_title and criteria):
-            continue
-        doc = {
-            "nct_id": str(nct_id),
-            "brief_title": str(brief_title),
-            "criteria": str(criteria),
-        }
-        if "overall_status" in item:
-            doc["overall_status"] = str(item.get("overall_status") or "")
         coll.update_one({"nct_id": doc["nct_id"]}, {"$set": doc}, upsert=True)
         upserted += 1
 
-    return jsonify({"upserted": upserted})
+    if upserted == 0:
+        return _error_response(
+            "No valid trials could be imported. For ClinicalTrials.gov JSON, each study needs "
+            "protocolSection.identificationModule.nctId and protocolSection.eligibilityModule."
+            "eligibilityCriteria. Legacy rows need nct_id, brief_title, and criteria.",
+            400,
+        )
+
+    return jsonify({"upserted": upserted, "skipped": skipped})
 
 
 @app.get("/api/patient_report_pdf")
@@ -253,20 +263,108 @@ def patient_report_pdf():
     p.drawString(72, y, f"TrialMatch AI Report – Patient {patient_id}")
     y -= 32
 
+    def wrap_text(text: str, font_name: str, font_size: int, max_width: float) -> List[str]:
+        """
+        Word-wrap text for ReportLab canvas drawString.
+        """
+        raw = (text or "").strip()
+        if not raw:
+            return [""]
+
+        lines: List[str] = []
+        for paragraph in raw.splitlines() or [""]:
+            words = paragraph.split()
+            if not words:
+                lines.append("")
+                continue
+
+            current = words[0]
+            for word in words[1:]:
+                candidate = f"{current} {word}"
+                if stringWidth(candidate, font_name, font_size) <= max_width:
+                    current = candidate
+                else:
+                    lines.append(current)
+                    current = word
+            lines.append(current)
+        return lines
+
+    def unique_items(items: Any) -> List[str]:
+        out: List[str] = []
+        seen = set()
+        for raw in items or []:
+            value = str(raw or "").strip()
+            if not value:
+                continue
+            key = value.lower()
+            if key in seen:
+                continue
+            seen.add(key)
+            out.append(value)
+        return out
+
+    def draw_wrapped_line(text: str, font_name: str, font_size: int, x: float, max_width: float):
+        nonlocal y
+        p.setFont(font_name, font_size)
+        for line in wrap_text(text, font_name, font_size, max_width):
+            if y < 72:
+                p.showPage()
+                y = height - 72
+                p.setFont(font_name, font_size)
+            p.drawString(x, y, line)
+            y -= 12
+
+    def draw_bulleted_section(title: str, items: List[str], preview_limit: int):
+        nonlocal y
+        p.setFont("Helvetica-Bold", 11)
+        p.drawString(72, y, f"{title} ({len(items)})")
+        y -= 16
+        if not items:
+            draw_wrapped_line("None parsed", "Helvetica", 10, 72, width - 144)
+            y -= 8
+            return
+
+        shown = items[:preview_limit]
+        p.setFont("Helvetica", 10)
+        for item in shown:
+            draw_wrapped_line(f"- {item}", "Helvetica", 10, 72, width - 144)
+            y -= 1
+        if len(items) > preview_limit:
+            draw_wrapped_line(
+                f"(+{len(items) - preview_limit} more in source profile)",
+                "Helvetica-Oblique",
+                9,
+                72,
+                width - 144,
+            )
+        y -= 10
+
     p.setFont("Helvetica", 10)
     created_at = match_doc.get("created_at", "")
     mode = match_doc.get("mode", "")
     p.drawString(72, y, f"Mode: {mode}    Generated at: {created_at}")
     y -= 24
 
-    # Conditions
-    conditions = ", ".join(profile.get("conditions", []) or [])
+    conditions = unique_items(profile.get("conditions"))
+    medications = unique_items(profile.get("medications"))
+    draw_bulleted_section("Conditions", conditions, preview_limit=12)
+    draw_bulleted_section("Medications", medications, preview_limit=10)
+
     p.setFont("Helvetica-Bold", 11)
-    p.drawString(72, y, "Conditions")
+    p.drawString(72, y, "Summary narrative")
     y -= 16
-    p.setFont("Helvetica", 10)
-    p.drawString(72, y, conditions or "None parsed")
-    y -= 24
+    raw_summary = str(profile.get("text_summary") or "").strip()
+    if raw_summary:
+        sentences = [s.strip() for s in raw_summary.split(". ") if s.strip()]
+        summary_preview = ". ".join(sentences[:6]).strip()
+        if summary_preview and not summary_preview.endswith("."):
+            summary_preview += "."
+        if len(sentences) > 6:
+            summary_preview += f" (+{len(sentences) - 6} more sentences)"
+        draw_wrapped_line(summary_preview, "Helvetica", 10, 72, width - 144)
+    else:
+        draw_wrapped_line("No summary available.", "Helvetica", 10, 72, width - 144)
+    y -= 12
 
     # Trials table (top N)
     p.setFont("Helvetica-Bold", 11)
@@ -280,14 +378,26 @@ def patient_report_pdf():
     p.setFont("Helvetica", 9)
 
     for trial in (match_doc.get("trials") or [])[:15]:
-        if y < 72:
+        title_lines = wrap_text(str(trial.get("title", "")), "Helvetica", 9, 290)
+        required_height = max(14, len(title_lines) * 11) + 2
+        if y - required_height < 72:
             p.showPage()
             y = height - 72
+            p.setFont("Helvetica-Bold", 9)
+            p.drawString(72, y, "NCT ID")
+            p.drawString(200, y, "Title")
+            p.drawString(500, y, "Score")
+            y -= 14
             p.setFont("Helvetica", 9)
-        p.drawString(72, y, str(trial.get("nct_id", "")))
-        p.drawString(200, y, str(trial.get("title", ""))[:70])
-        p.drawString(500, y, f"{trial.get('score', 0):.1f}")
-        y -= 14
+
+        nct_id = str(trial.get("nct_id", ""))
+        score = f"{trial.get('score', 0):.1f}"
+
+        p.drawString(72, y, nct_id)
+        p.drawString(500, y, score)
+        for i, line in enumerate(title_lines):
+            p.drawString(200, y - (i * 11), line)
+        y -= max(14, len(title_lines) * 11) + 2
 
     p.showPage()
     p.save()
