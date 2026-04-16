@@ -2,6 +2,13 @@ import os
 from dataclasses import dataclass
 
 
+def _env_flag(name: str, default: bool = False) -> bool:
+    raw = os.getenv(name)
+    if raw is None:
+        return default
+    return raw.strip().lower() in {"1", "true", "yes", "on"}
+
+
 @dataclass
 class Settings:
     """
@@ -22,6 +29,14 @@ class Settings:
     hf_embedding_model: str = (
         os.getenv("HF_EMBEDDING_MODEL", "").strip()
         or "NeuML/pubmedbert-base-embeddings"
+    )
+    # Dev-only switch: use local Transformers inference instead of HF hosted APIs.
+    # Defaults to False so production behavior is unchanged.
+    dev_local_inference: bool = _env_flag("DEV_LOCAL_INFERENCE", False)
+    # Dev-only local reasoning model (used only when DEV_LOCAL_INFERENCE=true).
+    dev_local_reasoning_model: str = (
+        os.getenv("DEV_LOCAL_REASONING_MODEL", "").strip()
+        or "microsoft/Phi-3-mini-4k-instruct"
     )
 
     # Local Synthea directory if used outside the API upload flow

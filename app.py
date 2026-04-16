@@ -1,5 +1,6 @@
 from datetime import datetime, timezone
 import io
+import logging
 import time
 from typing import Any, Dict, List
 
@@ -30,6 +31,7 @@ from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
 CORS(app)
+logger = logging.getLogger(__name__)
 
 
 def _error_response(message: str, status: int):
@@ -136,6 +138,12 @@ def trials_match():
     except ValueError as ve:
         return _error_response(str(ve), 404)
     except Exception as exc:
+        logger.exception(
+            "trials_match failed for patient_id=%s mode=%s num_trials=%s",
+            patient_id,
+            mode,
+            num_trials,
+        )
         return _error_response(str(exc), 500)
 
     return jsonify(
@@ -182,6 +190,12 @@ def trials_match_batch():
                 }
             )
         except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "trials_match_batch failed for patient_id=%s mode=%s num_trials=%s",
+                pid,
+                mode,
+                num_trials,
+            )
             results.append(
                 {
                     "patient_id": str(pid),

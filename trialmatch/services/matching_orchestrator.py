@@ -11,6 +11,8 @@ This module ties together:
 from __future__ import annotations
 
 from datetime import datetime, timezone
+import logging
+import time
 from typing import Dict, Any, List, Literal, Optional
 
 from trialmatch.services.db import patients_collection, matches_collection
@@ -24,6 +26,7 @@ from trialmatch.config import settings
 
 
 MatchMode = Literal["demo", "random"]
+logger = logging.getLogger(__name__)
 
 
 def _get_patient_profile(patient_id: str) -> Optional[Dict[str, Any]]:
@@ -56,6 +59,14 @@ def run_matching_for_patient(
     if not profile:
         raise ValueError(f"Patient '{patient_id}' not found or has no profile.")
 
+    started = time.perf_counter()
+    logger.info(
+        "matching:start patient_id=%s mode=%s num_trials=%s",
+        patient_id,
+        mode,
+        num_trials,
+    )
+
     # --- Select trials to analyze ---
     if mode == "demo":
         trials_df = load_target_trials_data()
@@ -67,20 +78,44 @@ def run_matching_for_patient(
     if trials_df is None or trials_df.empty:
         raise RuntimeError("No trials available for matching.")
 
+    logger.info("matching:trials_selected patient_id=%s count=%s", patient_id, len(trials_df))
+
     # --- Pre-parse criteria for all selected trials ---
     criteria_cache: Dict[str, Dict[str, Any]] = {}
     for _, trial in trials_df.iterrows():
         nct_id = trial["nct_id"]
         if nct_id in criteria_cache:
             continue
+        t0 = time.perf_counter()
+        logger.info("matching:parse:start patient_id=%s nct_id=%s", patient_id, nct_id)
         criteria_cache[nct_id] = parse_eligibility_criteria(trial["criteria"])
+        logger.info(
+            "matching:parse:done patient_id=%s nct_id=%s elapsed_s=%.2f",
+            patient_id,
+            nct_id,
+            time.perf_counter() - t0,
+        )
 
     # --- Compute scores ---
     results: List[Dict[str, Any]] = []
     for nct_id, parsed_criteria in criteria_cache.items():
         if not parsed_criteria.get("inclusion"):
+            logger.info(
+                "matching:score:skip_no_inclusion patient_id=%s nct_id=%s",
+                patient_id,
+                nct_id,
+            )
             continue
+        t1 = time.perf_counter()
+        logger.info("matching:score:start patient_id=%s nct_id=%s", patient_id, nct_id)
         score = calculate_match_score(profile, parsed_criteria)
+        logger.info(
+            "matching:score:done patient_id=%s nct_id=%s score=%.2f elapsed_s=%.2f",
+            patient_id,
+            nct_id,
+            score,
+            time.perf_counter() - t1,
+        )
         if score <= 0:
             continue
 
@@ -104,6 +139,13 @@ def run_matching_for_patient(
     }
 
     matches_collection().insert_one(match_doc)
+    logger.info(
+        "matching:done patient_id=%s mode=%s matched_trials=%s elapsed_s=%.2f",
+        patient_id,
+        mode,
+        len(results),
+        time.perf_counter() - started,
+    )
     # Convert ObjectId to string for API response
     match_doc["_id"] = str(match_doc.get("_id", ""))  # may be absent in memory
     return match_doc
