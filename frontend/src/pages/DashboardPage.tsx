@@ -224,7 +224,7 @@ const DashboardPage: React.FC = () => {
                     </p>
                     {previewSnapshot.topTrials.length === 0 ? (
                       <p className="mt-0.5 text-slate-500">
-                        No runs yet. Open the patient and use &quot;Match to demo trials&quot; or
+                        No runs yet. Open the patient and use &quot;Match to all trials&quot; or
                         &quot;Match to random trials&quot;.
                       </p>
                     ) : (
@@ -248,7 +248,9 @@ const DashboardPage: React.FC = () => {
                     {previewSnapshot.matchCreatedAt && previewSnapshot.topTrials.length > 0 && (
                       <p className="mt-2 text-[0.6rem] text-slate-500">
                         Last run: {previewSnapshot.matchCreatedAt}
-                        {previewSnapshot.matchMode ? ` · ${previewSnapshot.matchMode}` : ""}
+                        {previewSnapshot.matchMode
+                          ? ` · ${previewSnapshot.matchMode === "demo" ? "All" : previewSnapshot.matchMode}`
+                          : ""}
                       </p>
                     )}
                   </div>

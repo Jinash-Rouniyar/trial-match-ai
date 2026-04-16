@@ -1,5 +1,7 @@
 from datetime import datetime, timezone
+import hashlib
 import io
+import logging
 import time
 from typing import Any, Dict, List
 
@@ -18,6 +20,8 @@ from trialmatch.services.clinicaltrials_gov_import import (
     normalize_trial_record,
 )
 from trialmatch.services.patient_processor import build_patient_profile_from_json
+from trialmatch.services.matching_engine import get_embedding
+from trialmatch.services.prepared_trials import build_trial_cache
 from trialmatch.services.matching_orchestrator import (
     run_matching_for_patient,
     latest_matches_for_patient,
@@ -30,6 +34,7 @@ from reportlab.pdfgen import canvas
 
 app = Flask(__name__)
 CORS(app)
+logger = logging.getLogger(__name__)
 
 
 def _error_response(message: str, status: int):
@@ -59,10 +64,20 @@ def upload_patient():
     if not profile:
         return _error_response("Could not build patient profile from supplied JSON.", 400)
 
+    summary = str(profile.get("text_summary") or "").strip()
+    if summary:
+        profile_embedding = get_embedding(summary).tolist()
+        profile_embedding_hash = hashlib.sha256(summary.encode("utf-8")).hexdigest()
+    else:
+        profile_embedding = []
+        profile_embedding_hash = ""
+
     doc = {
         "patient_id": patient_id,
         "created_at": datetime.now(timezone.utc).isoformat(),
         "profile": profile,
+        "profile_embedding": profile_embedding,
+        "profile_embedding_hash": profile_embedding_hash,
     }
     patients_collection().update_one(
         {"patient_id": patient_id},
@@ -136,6 +151,12 @@ def trials_match():
     except ValueError as ve:
         return _error_response(str(ve), 404)
     except Exception as exc:
+        logger.exception(
+            "trials_match failed for patient_id=%s mode=%s num_trials=%s",
+            patient_id,
+            mode,
+            num_trials,
+        )
         return _error_response(str(exc), 500)
 
     return jsonify(
@@ -182,6 +203,12 @@ def trials_match_batch():
                 }
             )
         except Exception as exc:  # noqa: BLE001
+            logger.exception(
+                "trials_match_batch failed for patient_id=%s mode=%s num_trials=%s",
+                pid,
+                mode,
+                num_trials,
+            )
             results.append(
                 {
                     "patient_id": str(pid),
@@ -220,7 +247,12 @@ def trials_upload():
         if not doc:
             skipped += 1
             continue
-        coll.update_one({"nct_id": doc["nct_id"]}, {"$set": doc}, upsert=True)
+        cache_payload = build_trial_cache(doc["criteria"])
+        coll.update_one(
+            {"nct_id": doc["nct_id"]},
+            {"$set": {**doc, **cache_payload}},
+            upsert=True,
+        )
         upserted += 1
 
     if upserted == 0:
