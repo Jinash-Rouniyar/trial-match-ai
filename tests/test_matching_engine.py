@@ -44,3 +44,20 @@ def test_calculate_match_score_positive(monkeypatch):
   score = matching_engine.calculate_match_score(patient_profile, trial_criteria)
   assert score > 0.0
 
+
+def test_calculate_match_score_from_precomputed_penalizes_without_zeroing():
+  patient_embedding = matching_engine.np.array([1.0, 0.0], dtype=matching_engine.np.float32)
+  trial_criteria = {
+      "inclusion_embeddings": [
+          [1.0, 0.0],  # strong match
+          [0.0, 1.0],  # clear mismatch
+      ],
+      "exclusion_embeddings": [],
+  }
+
+  score = matching_engine.calculate_match_score_from_precomputed(
+      patient_embedding, trial_criteria
+  )
+
+  assert 70.0 <= score < 100.0
+

@@ -11,6 +11,7 @@ const MatchReportPage: React.FC = () => {
   const [error, setError] = useState<string | null>(null);
   const [matchDoc, setMatchDoc] = useState<MatchDocument | null>(null);
   const { session } = useAuth();
+  const displayMode = matchDoc?.mode === "demo" ? "All" : matchDoc?.mode;
 
   useEffect(() => {
     const load = async () => {
@@ -72,7 +73,7 @@ const MatchReportPage: React.FC = () => {
         {matchDoc && (
           <>
             <p className="text-xs text-slate-600">
-              Mode: <span className="font-medium text-slate-900">{matchDoc.mode}</span> · Generated
+              Mode: <span className="font-medium text-slate-900">{displayMode}</span> · Generated
               at {matchDoc.created_at}
             </p>
             <MatchResultTable trials={matchDoc.trials} />

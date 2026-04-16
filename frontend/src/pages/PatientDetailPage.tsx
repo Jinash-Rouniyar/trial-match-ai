@@ -18,6 +18,7 @@ const PatientDetailPage: React.FC = () => {
   const [showAllConditions, setShowAllConditions] = useState(false);
   const [showAllMedications, setShowAllMedications] = useState(false);
   const [showFullNarrative, setShowFullNarrative] = useState(false);
+  const latestMatchMode = latestMatches?.mode === "demo" ? "All" : latestMatches?.mode;
 
   const toUniqueList = (items?: string[]) => {
     const out: string[] = [];
@@ -233,7 +234,7 @@ const PatientDetailPage: React.FC = () => {
           </p>
           <h2 className="mt-1 text-sm font-medium text-slate-900">Latest match results</h2>
           <p className="text-xs text-slate-600">
-            Mode: <span className="font-medium text-slate-900">{latestMatches.mode}</span> ·
+            Mode: <span className="font-medium text-slate-900">{latestMatchMode}</span> ·
             Generated at {latestMatches.created_at}
           </p>
           <button
